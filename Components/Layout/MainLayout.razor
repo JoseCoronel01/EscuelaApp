@@ -1,0 +1,115 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Nav
+
+<div class="shell">
+    <!-- Sidebar -->
+    <aside class="sidebar @(_menuOpen ? "open" : "")">
+        <div class="sidebar-brand">
+            <span class="brand-icon">🎓</span>
+            <div class="brand-text">
+                <span class="brand-title">EduSys</span>
+                <span class="brand-sub">Gestión Escolar</span>
+            </div>
+        </div>
+
+        <nav class="sidebar-nav">
+            <!-- Dashboard -->
+            <NavLink class="nav-item" href="" Match="NavLinkMatch.All">
+                <span class="nav-icon">⊞</span>
+                <span class="nav-label">Dashboard</span>
+            </NavLink>
+
+            <!-- Catálogos -->
+            <div class="nav-section">
+                <span class="nav-section-label">Catálogos</span>
+            </div>
+            <NavLink class="nav-item" href="catalogos/alumnos">
+                <span class="nav-icon">👨‍🎓</span>
+                <span class="nav-label">Alumnos</span>
+            </NavLink>
+            <NavLink class="nav-item" href="catalogos/maestros">
+                <span class="nav-icon">👩‍🏫</span>
+                <span class="nav-label">Maestros</span>
+            </NavLink>
+            <NavLink class="nav-item" href="catalogos/materias">
+                <span class="nav-icon">📚</span>
+                <span class="nav-label">Materias</span>
+            </NavLink>
+            <NavLink class="nav-item" href="catalogos/grupos">
+                <span class="nav-icon">🏫</span>
+                <span class="nav-label">Grupos</span>
+            </NavLink>
+
+            <!-- Movimientos -->
+            <div class="nav-section">
+                <span class="nav-section-label">Movimientos</span>
+            </div>
+            <NavLink class="nav-item" href="movimientos/inscripciones">
+                <span class="nav-icon">📋</span>
+                <span class="nav-label">Inscripciones</span>
+            </NavLink>
+            <NavLink class="nav-item" href="movimientos/calificaciones">
+                <span class="nav-icon">📊</span>
+                <span class="nav-label">Calificaciones</span>
+            </NavLink>
+
+            <!-- Reportes -->
+            <div class="nav-section">
+                <span class="nav-section-label">Reportes</span>
+            </div>
+            <NavLink class="nav-item" href="reportes/kardex">
+                <span class="nav-icon">📄</span>
+                <span class="nav-label">Kárdex</span>
+            </NavLink>
+            <NavLink class="nav-item" href="reportes/grupos">
+                <span class="nav-icon">📈</span>
+                <span class="nav-label">Por Grupo</span>
+            </NavLink>
+        </nav>
+
+        <div class="sidebar-footer">
+            <span class="sidebar-version">v1.0 · .NET 10 · SQLite</span>
+        </div>
+    </aside>
+
+    <!-- Overlay móvil -->
+    @if (_menuOpen)
+    {
+        <div class="overlay" @onclick="() => _menuOpen = false"></div>
+    }
+
+    <!-- Contenido principal -->
+    <div class="main-content">
+        <header class="topbar">
+            <button class="menu-toggle" @onclick="() => _menuOpen = !_menuOpen">☰</button>
+            <div class="topbar-title">@GetPageTitle()</div>
+            <div class="topbar-actions">
+                <span class="topbar-date">@DateTime.Now.ToString("dddd, dd MMMM yyyy", new System.Globalization.CultureInfo("es-MX"))</span>
+            </div>
+        </header>
+
+        <main class="page-content">
+            @Body
+        </main>
+    </div>
+</div>
+
+@code {
+    private bool _menuOpen = false;
+
+    private string GetPageTitle()
+    {
+        var path = Nav.ToBaseRelativePath(Nav.Uri).ToLower();
+        return path switch {
+            "" or "/"                         => "Dashboard",
+            var p when p.Contains("alumnos")      => "Catálogo de Alumnos",
+            var p when p.Contains("maestros")     => "Catálogo de Maestros",
+            var p when p.Contains("materias")     => "Catálogo de Materias",
+            var p when p.Contains("grupos")       => "Catálogo de Grupos",
+            var p when p.Contains("inscripciones") => "Movimientos · Inscripciones",
+            var p when p.Contains("calificaciones") => "Movimientos · Calificaciones",
+            var p when p.Contains("kardex")       => "Reporte · Kárdex",
+            _                                 => "Sistema Escolar"
+        };
+    }
+}

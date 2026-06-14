@@ -1,0 +1,139 @@
+@* ─── MAESTROS ───────────────────────────────────────────────────────────── *@
+@page "/catalogos/maestros"
+@inject MaestroService MaestroSvc
+@inject IJSRuntime JS
+
+<PageTitle>Maestros — EduSys</PageTitle>
+
+<div class="page-container">
+    <div class="toolbar">
+        <div class="toolbar-left">
+            <input class="search-input" type="text" placeholder="Buscar maestro..."
+                   @bind="_busqueda" @oninput="CargarAsync" />
+        </div>
+        <div class="toolbar-right">
+            <button class="btn btn-excel" @onclick="ExportarAsync">📥 Exportar Excel</button>
+            <button class="btn btn-primary" @onclick="Nuevo">＋ Nuevo Maestro</button>
+        </div>
+    </div>
+
+    @if (_cargando) { <div class="loading-state"><div class="spinner"></div></div> }
+    else
+    {
+        <div class="table-card">
+            <table class="data-table">
+                <thead><tr>
+                    <th>Núm. Empleado</th><th>Nombre</th><th>Especialidad</th>
+                    <th>Email</th><th>Teléfono</th><th>Estado</th><th>Acciones</th>
+                </tr></thead>
+                <tbody>
+                    @foreach (var m in _lista)
+                    {
+                        <tr>
+                            <td><span class="code">@m.NumeroEmpleado</span></td>
+                            <td><strong>@m.NombreCompleto</strong></td>
+                            <td>@m.Especialidad</td>
+                            <td>@m.Email</td>
+                            <td>@m.Telefono</td>
+                            <td><span class="badge @(m.Activo ? "badge-success" : "badge-secondary")">@(m.Activo?"Activo":"Inactivo")</span></td>
+                            <td class="actions">
+                                <button class="btn-icon" @onclick="() => Editar(m)">✏️</button>
+                                <button class="btn-icon danger" @onclick="() => ConfEliminar(m)">🗑️</button>
+                            </td>
+                        </tr>
+                    }
+                    @if (_lista.Count == 0) { <tr><td colspan="7" class="empty-row">Sin registros</td></tr> }
+                </tbody>
+            </table>
+        </div>
+        <div class="table-footer">Total: @_lista.Count</div>
+    }
+
+    @if (_modal)
+    {
+        <div class="modal-backdrop" @onclick="Cerrar">
+            <div class="modal" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <h2>@(_item.Id == 0 ? "Nuevo Maestro" : "Editar Maestro")</h2>
+                    <button class="modal-close" @onclick="Cerrar">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-grid">
+                        <div class="form-group"><label>Núm. Empleado *</label><input class="form-control" @bind="_item.NumeroEmpleado" /></div>
+                        <div class="form-group"><label>Nombre *</label><input class="form-control" @bind="_item.Nombre" /></div>
+                        <div class="form-group"><label>Apellido Paterno *</label><input class="form-control" @bind="_item.ApellidoPaterno" /></div>
+                        <div class="form-group"><label>Apellido Materno</label><input class="form-control" @bind="_item.ApellidoMaterno" /></div>
+                        <div class="form-group"><label>Especialidad</label><input class="form-control" @bind="_item.Especialidad" /></div>
+                        <div class="form-group"><label>Email</label><input class="form-control" type="email" @bind="_item.Email" /></div>
+                        <div class="form-group"><label>Teléfono</label><input class="form-control" @bind="_item.Telefono" /></div>
+                        <div class="form-group"><label class="checkbox-label"><input type="checkbox" @bind="_item.Activo" /> Activo</label></div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_err)) { <div class="alert alert-danger">@_err</div> }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" @onclick="Cerrar">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="Guardar">Guardar</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_confirm)
+    {
+        <div class="modal-backdrop" @onclick="() => _confirm=false">
+            <div class="modal modal-sm" @onclick:stopPropagation="true">
+                <div class="modal-header danger"><h2>Confirmar</h2></div>
+                <div class="modal-body"><p>¿Eliminar a <strong>@_item.NombreCompleto</strong>?</p></div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" @onclick="() => _confirm=false">Cancelar</button>
+                    <button class="btn btn-danger" @onclick="Eliminar">Eliminar</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Maestro> _lista = new();
+    private Maestro _item = new();
+    private string _busqueda = "", _err = "";
+    private bool _cargando = true, _modal = false, _confirm = false;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        _lista = await MaestroSvc.ObtenerTodosAsync(_busqueda);
+        _cargando = false;
+    }
+
+    private void Nuevo() { _item = new Maestro(); _err = ""; _modal = true; }
+    private void Editar(Maestro m) { _item = new Maestro { Id=m.Id, NumeroEmpleado=m.NumeroEmpleado, Nombre=m.Nombre, ApellidoPaterno=m.ApellidoPaterno, ApellidoMaterno=m.ApellidoMaterno, Especialidad=m.Especialidad, Email=m.Email, Telefono=m.Telefono, Activo=m.Activo }; _err=""; _modal=true; }
+    private void ConfEliminar(Maestro m) { _item = m; _confirm = true; }
+    private void Cerrar() { _modal = false; _err = ""; }
+
+    private async Task Guardar()
+    {
+        if (string.IsNullOrWhiteSpace(_item.Nombre) || string.IsNullOrWhiteSpace(_item.NumeroEmpleado))
+        { _err = "Nombre y número de empleado son obligatorios."; return; }
+        await MaestroSvc.GuardarAsync(_item);
+        _modal = false;
+        await CargarAsync();
+    }
+
+    private async Task Eliminar()
+    {
+        await MaestroSvc.EliminarAsync(_item.Id);
+        _confirm = false;
+        await CargarAsync();
+    }
+
+    private async Task ExportarAsync()
+    {
+        var bytes = await MaestroSvc.ExportarExcelAsync(_busqueda);
+        await JS.InvokeVoidAsync("downloadFile", Convert.ToBase64String(bytes),
+            $"Maestros_{DateTime.Now:yyyyMMdd}.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+}

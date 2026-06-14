@@ -1,0 +1,287 @@
+@page "/movimientos/calificaciones"
+@inject CalificacionService CalSvc
+@inject InscripcionService InscSvc
+@inject IJSRuntime JS
+
+<PageTitle>Calificaciones — EduSys</PageTitle>
+
+<div class="page-container">
+    <div class="toolbar">
+        <div class="toolbar-left">
+            <input class="search-input" type="text" placeholder="Buscar alumno o materia..."
+                   @bind="_busqueda" @oninput="CargarAsync" />
+            <select class="form-control select-sm" @bind="_filtroPeriodo" @bind:after="CargarAsync">
+                <option value="">Todos los períodos</option>
+                @foreach (var p in _periodos)
+                { <option value="@p">@p</option> }
+            </select>
+        </div>
+        <div class="toolbar-right">
+            <button class="btn btn-excel" @onclick="ExportarExcelAsync">📥 Exportar Excel</button>
+            <button class="btn btn-primary" @onclick="NuevaCalificacion">＋ Nueva Calificación</button>
+        </div>
+    </div>
+
+    @if (_cargando)
+    {
+        <div class="loading-state"><div class="spinner"></div></div>
+    }
+    else
+    {
+        <div class="table-card">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Alumno</th>
+                        <th>Materia</th>
+                        <th>Grupo</th>
+                        <th class="text-center">P1</th>
+                        <th class="text-center">P2</th>
+                        <th class="text-center">P3</th>
+                        <th class="text-center">Promedio</th>
+                        <th>Estado</th>
+                        <th>Período</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in _filtradas)
+                    {
+                        <tr>
+                            <td><strong>@c.AlumnoNombre</strong></td>
+                            <td>@c.MateriaNombre</td>
+                            <td>@c.GrupoNombre</td>
+                            <td class="text-center">@c.Parcial1</td>
+                            <td class="text-center">@c.Parcial2</td>
+                            <td class="text-center">@c.Parcial3</td>
+                            <td class="text-center">
+                                <span class="badge @(c.Promedio >= 6 ? "badge-success" : c.Promedio == 0 ? "badge-secondary" : "badge-danger")">
+                                    @c.Promedio
+                                </span>
+                            </td>
+                            <td>
+                                <span class="estado-dot @EstadoClass(c.Estado)"></span>
+                                @c.Estado
+                            </td>
+                            <td>@c.Periodo</td>
+                            <td class="actions">
+                                <button class="btn-icon" @onclick="() => EditarCalificacion(c)">✏️</button>
+                                <button class="btn-icon danger" @onclick="() => ConfirmarEliminar(c)">🗑️</button>
+                            </td>
+                        </tr>
+                    }
+                    @if (_filtradas.Count == 0)
+                    {
+                        <tr><td colspan="10" class="empty-row">No hay calificaciones registradas</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="table-footer">Total: @_filtradas.Count registros</div>
+    }
+
+    <!-- Modal -->
+    @if (_mostrarModal)
+    {
+        <div class="modal-backdrop" @onclick="CerrarModal">
+            <div class="modal modal-lg" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <h2>@(_editar.Id == 0 ? "Nueva Calificación" : "Editar Calificación")</h2>
+                    <button class="modal-close" @onclick="CerrarModal">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-grid">
+                        <div class="form-group full-width">
+                            <label>Inscripción (Alumno / Materia / Grupo) *</label>
+                            <select class="form-control" @bind="_editar.InscripcionId" @bind:after="OnInscripcionChanged">
+                                <option value="0">Seleccionar inscripción...</option>
+                                @foreach (var i in _inscripciones)
+                                {
+                                    <option value="@i.Id">@i.AlumnoNombre — @i.MateriaNombre (@i.GrupoNombre)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Período *</label>
+                            <input class="form-control" @bind="_editar.Periodo" placeholder="Ej: 2025-A" />
+                        </div>
+                        <div class="form-group">
+                            <label>Parcial 1 (0-10)</label>
+                            <input class="form-control" type="number" min="0" max="10" step="0.1"
+                                   @bind="_editar.Parcial1" @bind:after="RecalcularPromedio" />
+                        </div>
+                        <div class="form-group">
+                            <label>Parcial 2 (0-10)</label>
+                            <input class="form-control" type="number" min="0" max="10" step="0.1"
+                                   @bind="_editar.Parcial2" @bind:after="RecalcularPromedio" />
+                        </div>
+                        <div class="form-group">
+                            <label>Parcial 3 (0-10)</label>
+                            <input class="form-control" type="number" min="0" max="10" step="0.1"
+                                   @bind="_editar.Parcial3" @bind:after="RecalcularPromedio" />
+                        </div>
+                        <div class="form-group">
+                            <label>Promedio (calculado)</label>
+                            <div class="promedio-display @(_editar.Promedio >= 6 ? "promedio-ok" : _editar.Promedio > 0 ? "promedio-fail" : "")">
+                                @_editar.Promedio.ToString("F2")
+                                <small>@_editar.Estado</small>
+                            </div>
+                        </div>
+                        <div class="form-group full-width">
+                            <label>Observaciones</label>
+                            <textarea class="form-control" rows="2" @bind="_editar.Observaciones"></textarea>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_error))
+                    {
+                        <div class="alert alert-danger">@_error</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" @onclick="CerrarModal">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="GuardarAsync" disabled="@_guardando">
+                        @(_guardando ? "Guardando..." : "Guardar")
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_mostrarConfirm)
+    {
+        <div class="modal-backdrop" @onclick="() => _mostrarConfirm = false">
+            <div class="modal modal-sm" @onclick:stopPropagation="true">
+                <div class="modal-header danger"><h2>Confirmar eliminación</h2></div>
+                <div class="modal-body">
+                    <p>¿Eliminar la calificación de <strong>@_editar.AlumnoNombre</strong> en <strong>@_editar.MateriaNombre</strong>?</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" @onclick="() => _mostrarConfirm = false">Cancelar</button>
+                    <button class="btn btn-danger" @onclick="EliminarAsync">Eliminar</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Calificacion> _calificaciones = new();
+    private List<Calificacion> _filtradas = new();
+    private List<Inscripcion> _inscripciones = new();
+    private List<string> _periodos = new();
+    private Calificacion _editar = new();
+    private string _busqueda = "";
+    private string _filtroPeriodo = "";
+    private bool _cargando = true;
+    private bool _mostrarModal = false;
+    private bool _mostrarConfirm = false;
+    private bool _guardando = false;
+    private string _error = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        _inscripciones = await InscSvc.ObtenerTodosAsync();
+        _periodos = _calificaciones.Select(c => c.Periodo).Distinct().OrderByDescending(p => p).ToList();
+    }
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        _calificaciones = await CalSvc.ObtenerTodosAsync(
+            periodo: string.IsNullOrEmpty(_filtroPeriodo) ? null : _filtroPeriodo);
+
+        _filtradas = string.IsNullOrWhiteSpace(_busqueda)
+            ? _calificaciones
+            : _calificaciones.Where(c =>
+                c.AlumnoNombre.Contains(_busqueda, StringComparison.OrdinalIgnoreCase) ||
+                c.MateriaNombre.Contains(_busqueda, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+
+        _cargando = false;
+    }
+
+    private void NuevaCalificacion()
+    {
+        _editar = new Calificacion { Periodo = $"{DateTime.Now.Year}-A" };
+        _error = "";
+        _mostrarModal = true;
+    }
+
+    private void EditarCalificacion(Calificacion c)
+    {
+        _editar = new Calificacion {
+            Id = c.Id, InscripcionId = c.InscripcionId,
+            AlumnoId = c.AlumnoId, MateriaId = c.MateriaId, GrupoId = c.GrupoId,
+            AlumnoNombre = c.AlumnoNombre, MateriaNombre = c.MateriaNombre,
+            Parcial1 = c.Parcial1, Parcial2 = c.Parcial2, Parcial3 = c.Parcial3,
+            Promedio = c.Promedio, Estado = c.Estado,
+            Periodo = c.Periodo, Observaciones = c.Observaciones
+        };
+        _error = "";
+        _mostrarModal = true;
+    }
+
+    private void ConfirmarEliminar(Calificacion c) { _editar = c; _mostrarConfirm = true; }
+
+    private void OnInscripcionChanged()
+    {
+        var insc = _inscripciones.FirstOrDefault(i => i.Id == _editar.InscripcionId);
+        if (insc is not null)
+        {
+            _editar.AlumnoId  = insc.AlumnoId;
+            _editar.MateriaId = insc.MateriaId;
+            _editar.GrupoId   = insc.GrupoId;
+        }
+    }
+
+    private void RecalcularPromedio()
+    {
+        _editar.Promedio = Math.Round((_editar.Parcial1 + _editar.Parcial2 + _editar.Parcial3) / 3, 2);
+        _editar.Estado = _editar.Promedio >= 6 ? "Aprobado" : (_editar.Promedio > 0 ? "Reprobado" : "En Curso");
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_editar.InscripcionId == 0 || string.IsNullOrWhiteSpace(_editar.Periodo))
+        {
+            _error = "Selecciona la inscripción y el período.";
+            return;
+        }
+        _guardando = true;
+        _error = "";
+        try
+        {
+            await CalSvc.GuardarAsync(_editar);
+            _mostrarModal = false;
+            await CargarAsync();
+        }
+        catch (Exception ex) { _error = $"Error: {ex.Message}"; }
+        finally { _guardando = false; }
+    }
+
+    private async Task EliminarAsync()
+    {
+        await CalSvc.EliminarAsync(_editar.Id);
+        _mostrarConfirm = false;
+        await CargarAsync();
+    }
+
+    private void CerrarModal() { _mostrarModal = false; _error = ""; }
+
+    private static string EstadoClass(string estado) => estado switch {
+        "Aprobado"  => "dot-success",
+        "Reprobado" => "dot-danger",
+        _           => "dot-warning"
+    };
+
+    private async Task ExportarExcelAsync()
+    {
+        var bytes = await CalSvc.ExportarExcelAsync(
+            periodo: string.IsNullOrEmpty(_filtroPeriodo) ? null : _filtroPeriodo);
+        var b64 = Convert.ToBase64String(bytes);
+        await JS.InvokeVoidAsync("downloadFile", b64,
+            $"Calificaciones_{DateTime.Now:yyyyMMdd}.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+}

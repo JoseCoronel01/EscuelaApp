@@ -1,0 +1,137 @@
+@page "/catalogos/materias"
+@inject MateriaService MateriaSvc
+@inject IJSRuntime JS
+
+<PageTitle>Materias — EduSys</PageTitle>
+
+<div class="page-container">
+    <div class="toolbar">
+        <div class="toolbar-left">
+            <input class="search-input" type="text" placeholder="Buscar materia..."
+                   @bind="_busqueda" @oninput="CargarAsync" />
+        </div>
+        <div class="toolbar-right">
+            <button class="btn btn-excel" @onclick="ExportarAsync">📥 Exportar Excel</button>
+            <button class="btn btn-primary" @onclick="Nuevo">＋ Nueva Materia</button>
+        </div>
+    </div>
+
+    @if (_cargando) { <div class="loading-state"><div class="spinner"></div></div> }
+    else
+    {
+        <div class="table-card">
+            <table class="data-table">
+                <thead><tr>
+                    <th>Clave</th><th>Nombre</th><th>Descripción</th>
+                    <th class="text-center">Créditos</th><th class="text-center">Horas/Semana</th>
+                    <th>Estado</th><th>Acciones</th>
+                </tr></thead>
+                <tbody>
+                    @foreach (var m in _lista)
+                    {
+                        <tr>
+                            <td><span class="code">@m.Clave</span></td>
+                            <td><strong>@m.Nombre</strong></td>
+                            <td>@m.Descripcion</td>
+                            <td class="text-center">@m.Creditos</td>
+                            <td class="text-center">@m.HorasSemanales</td>
+                            <td><span class="badge @(m.Activo ? "badge-success" : "badge-secondary")">@(m.Activo?"Activo":"Inactivo")</span></td>
+                            <td class="actions">
+                                <button class="btn-icon" @onclick="() => Editar(m)">✏️</button>
+                                <button class="btn-icon danger" @onclick="() => ConfEliminar(m)">🗑️</button>
+                            </td>
+                        </tr>
+                    }
+                    @if (_lista.Count == 0) { <tr><td colspan="7" class="empty-row">Sin registros</td></tr> }
+                </tbody>
+            </table>
+        </div>
+        <div class="table-footer">Total: @_lista.Count</div>
+    }
+
+    @if (_modal)
+    {
+        <div class="modal-backdrop" @onclick="Cerrar">
+            <div class="modal" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <h2>@(_item.Id == 0 ? "Nueva Materia" : "Editar Materia")</h2>
+                    <button class="modal-close" @onclick="Cerrar">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-grid">
+                        <div class="form-group"><label>Clave *</label><input class="form-control" @bind="_item.Clave" placeholder="Ej: MAT01" /></div>
+                        <div class="form-group"><label>Nombre *</label><input class="form-control" @bind="_item.Nombre" /></div>
+                        <div class="form-group full-width"><label>Descripción</label><textarea class="form-control" rows="2" @bind="_item.Descripcion"></textarea></div>
+                        <div class="form-group"><label>Créditos</label><input class="form-control" type="number" min="0" @bind="_item.Creditos" /></div>
+                        <div class="form-group"><label>Horas Semanales</label><input class="form-control" type="number" min="0" @bind="_item.HorasSemanales" /></div>
+                        <div class="form-group"><label class="checkbox-label"><input type="checkbox" @bind="_item.Activo" /> Activo</label></div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_err)) { <div class="alert alert-danger">@_err</div> }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" @onclick="Cerrar">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="Guardar">Guardar</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_confirm)
+    {
+        <div class="modal-backdrop" @onclick="() => _confirm=false">
+            <div class="modal modal-sm" @onclick:stopPropagation="true">
+                <div class="modal-header danger"><h2>Confirmar</h2></div>
+                <div class="modal-body"><p>¿Eliminar la materia <strong>@_item.Nombre</strong>?</p></div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" @onclick="() => _confirm=false">Cancelar</button>
+                    <button class="btn btn-danger" @onclick="Eliminar">Eliminar</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Materia> _lista = new();
+    private Materia _item = new();
+    private string _busqueda = "", _err = "";
+    private bool _cargando = true, _modal = false, _confirm = false;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        _lista = await MateriaSvc.ObtenerTodosAsync(_busqueda);
+        _cargando = false;
+    }
+
+    private void Nuevo() { _item = new Materia(); _err = ""; _modal = true; }
+    private void Editar(Materia m) { _item = new Materia { Id=m.Id, Clave=m.Clave, Nombre=m.Nombre, Descripcion=m.Descripcion, Creditos=m.Creditos, HorasSemanales=m.HorasSemanales, Activo=m.Activo }; _err=""; _modal=true; }
+    private void ConfEliminar(Materia m) { _item = m; _confirm = true; }
+    private void Cerrar() { _modal = false; _err = ""; }
+
+    private async Task Guardar()
+    {
+        if (string.IsNullOrWhiteSpace(_item.Clave) || string.IsNullOrWhiteSpace(_item.Nombre))
+        { _err = "Clave y nombre son obligatorios."; return; }
+        await MateriaSvc.GuardarAsync(_item);
+        _modal = false;
+        await CargarAsync();
+    }
+
+    private async Task Eliminar()
+    {
+        await MateriaSvc.EliminarAsync(_item.Id);
+        _confirm = false;
+        await CargarAsync();
+    }
+
+    private async Task ExportarAsync()
+    {
+        var bytes = await MateriaSvc.ExportarExcelAsync(_busqueda);
+        await JS.InvokeVoidAsync("downloadFile", Convert.ToBase64String(bytes),
+            $"Materias_{DateTime.Now:yyyyMMdd}.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+}

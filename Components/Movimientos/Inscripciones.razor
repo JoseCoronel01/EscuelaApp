@@ -1,0 +1,264 @@
+@page "/movimientos/inscripciones"
+@inject InscripcionService InscSvc
+@inject AlumnoService AlumnoSvc
+@inject GrupoService GrupoSvc
+@inject MateriaService MateriaSvc
+@inject IJSRuntime JS
+
+<PageTitle>Inscripciones — EduSys</PageTitle>
+
+<div class="page-container">
+    <div class="toolbar">
+        <div class="toolbar-left">
+            <input class="search-input" type="text" placeholder="Buscar alumno o materia..."
+                   @bind="_busqueda" @oninput="FiltrarAsync" />
+            <select class="form-control select-sm" @bind="_filtroEstado" @bind:after="FiltrarAsync">
+                <option value="">Todos los estados</option>
+                <option>Activa</option>
+                <option>Baja</option>
+                <option>Finalizada</option>
+            </select>
+        </div>
+        <div class="toolbar-right">
+            <button class="btn btn-excel" @onclick="ExportarExcelAsync">📥 Exportar Excel</button>
+            <button class="btn btn-primary" @onclick="NuevaInscripcion">＋ Nueva Inscripción</button>
+        </div>
+    </div>
+
+    @if (_cargando)
+    {
+        <div class="loading-state"><div class="spinner"></div></div>
+    }
+    else
+    {
+        <div class="table-card">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Matrícula</th>
+                        <th>Alumno</th>
+                        <th>Grupo</th>
+                        <th>Materia</th>
+                        <th>Ciclo</th>
+                        <th>Fecha</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var i in _filtradas)
+                    {
+                        <tr>
+                            <td><span class="code">@i.AlumnoMatricula</span></td>
+                            <td><strong>@i.AlumnoNombre</strong></td>
+                            <td>@i.GrupoNombre</td>
+                            <td>@i.MateriaNombre</td>
+                            <td>@i.CicloEscolar</td>
+                            <td>@i.FechaInscripcion.ToString("dd/MM/yyyy")</td>
+                            <td>
+                                <span class="badge @BadgeClass(i.Estado)">@i.Estado</span>
+                            </td>
+                            <td class="actions">
+                                <button class="btn-icon" @onclick="() => EditarInscripcion(i)">✏️</button>
+                                <button class="btn-icon danger" @onclick="() => ConfirmarEliminar(i)">🗑️</button>
+                            </td>
+                        </tr>
+                    }
+                    @if (_filtradas.Count == 0)
+                    {
+                        <tr><td colspan="8" class="empty-row">No hay inscripciones registradas</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="table-footer">Total: @_filtradas.Count registros</div>
+    }
+
+    @if (_mostrarModal)
+    {
+        <div class="modal-backdrop" @onclick="CerrarModal">
+            <div class="modal" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <h2>@(_editar.Id == 0 ? "Nueva Inscripción" : "Editar Inscripción")</h2>
+                    <button class="modal-close" @onclick="CerrarModal">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Alumno *</label>
+                            <select class="form-control" @bind="_editar.AlumnoId">
+                                <option value="0">Seleccionar...</option>
+                                @foreach (var a in _alumnos)
+                                { <option value="@a.Id">@a.NombreCompleto (@a.Matricula)</option> }
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Grupo *</label>
+                            <select class="form-control" @bind="_editar.GrupoId">
+                                <option value="0">Seleccionar...</option>
+                                @foreach (var g in _grupos)
+                                { <option value="@g.Id">@g.Nombre — @g.Grado</option> }
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Materia *</label>
+                            <select class="form-control" @bind="_editar.MateriaId">
+                                <option value="0">Seleccionar...</option>
+                                @foreach (var m in _materias)
+                                { <option value="@m.Id">@m.Nombre (@m.Clave)</option> }
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Ciclo Escolar *</label>
+                            <input class="form-control" @bind="_editar.CicloEscolar" placeholder="Ej: 2025-A" />
+                        </div>
+                        <div class="form-group">
+                            <label>Estado</label>
+                            <select class="form-control" @bind="_editar.Estado">
+                                <option>Activa</option>
+                                <option>Baja</option>
+                                <option>Finalizada</option>
+                            </select>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_error))
+                    { <div class="alert alert-danger">@_error</div> }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" @onclick="CerrarModal">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="GuardarAsync" disabled="@_guardando">
+                        @(_guardando ? "Guardando..." : "Guardar")
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_mostrarConfirm)
+    {
+        <div class="modal-backdrop" @onclick="() => _mostrarConfirm = false">
+            <div class="modal modal-sm" @onclick:stopPropagation="true">
+                <div class="modal-header danger"><h2>Confirmar eliminación</h2></div>
+                <div class="modal-body">
+                    <p>¿Eliminar inscripción de <strong>@_editar.AlumnoNombre</strong>?</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" @onclick="() => _mostrarConfirm = false">Cancelar</button>
+                    <button class="btn btn-danger" @onclick="EliminarAsync">Eliminar</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Inscripcion> _inscripciones = new();
+    private List<Inscripcion> _filtradas = new();
+    private List<Alumno> _alumnos = new();
+    private List<Grupo> _grupos = new();
+    private List<Materia> _materias = new();
+    private Inscripcion _editar = new();
+    private string _busqueda = "";
+    private string _filtroEstado = "";
+    private bool _cargando = true;
+    private bool _mostrarModal = false;
+    private bool _mostrarConfirm = false;
+    private bool _guardando = false;
+    private string _error = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _alumnos  = await AlumnoSvc.ObtenerTodosAsync();
+        _grupos   = await GrupoSvc.ObtenerTodosAsync();
+        _materias = await MateriaSvc.ObtenerTodosAsync();
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        _inscripciones = await InscSvc.ObtenerTodosAsync();
+        FiltrarAsync();
+        _cargando = false;
+    }
+
+    private void FiltrarAsync()
+    {
+        _filtradas = _inscripciones.Where(i =>
+            (string.IsNullOrEmpty(_busqueda) ||
+             i.AlumnoNombre.Contains(_busqueda, StringComparison.OrdinalIgnoreCase) ||
+             i.MateriaNombre.Contains(_busqueda, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrEmpty(_filtroEstado) || i.Estado == _filtroEstado)
+        ).ToList();
+    }
+
+    private void NuevaInscripcion()
+    {
+        _editar = new Inscripcion {
+            FechaInscripcion = DateTime.Now,
+            CicloEscolar = $"{DateTime.Now.Year}-A",
+            Estado = "Activa"
+        };
+        _error = "";
+        _mostrarModal = true;
+    }
+
+    private void EditarInscripcion(Inscripcion i)
+    {
+        _editar = new Inscripcion {
+            Id = i.Id, AlumnoId = i.AlumnoId, GrupoId = i.GrupoId,
+            MateriaId = i.MateriaId, FechaInscripcion = i.FechaInscripcion,
+            CicloEscolar = i.CicloEscolar, Estado = i.Estado,
+            AlumnoNombre = i.AlumnoNombre
+        };
+        _error = "";
+        _mostrarModal = true;
+    }
+
+    private void ConfirmarEliminar(Inscripcion i) { _editar = i; _mostrarConfirm = true; }
+
+    private async Task GuardarAsync()
+    {
+        if (_editar.AlumnoId == 0 || _editar.GrupoId == 0 || _editar.MateriaId == 0 ||
+            string.IsNullOrWhiteSpace(_editar.CicloEscolar))
+        {
+            _error = "Alumno, grupo, materia y ciclo son obligatorios.";
+            return;
+        }
+        _guardando = true;
+        _error = "";
+        try
+        {
+            await InscSvc.GuardarAsync(_editar);
+            _mostrarModal = false;
+            await CargarAsync();
+        }
+        catch (Exception ex) { _error = $"Error: {ex.Message}"; }
+        finally { _guardando = false; }
+    }
+
+    private async Task EliminarAsync()
+    {
+        await InscSvc.EliminarAsync(_editar.Id);
+        _mostrarConfirm = false;
+        await CargarAsync();
+    }
+
+    private void CerrarModal() { _mostrarModal = false; _error = ""; }
+
+    private static string BadgeClass(string estado) => estado switch {
+        "Activa"     => "badge-success",
+        "Baja"       => "badge-danger",
+        "Finalizada" => "badge-secondary",
+        _            => "badge-secondary"
+    };
+
+    private async Task ExportarExcelAsync()
+    {
+        var bytes = await InscSvc.ExportarExcelAsync();
+        var b64 = Convert.ToBase64String(bytes);
+        await JS.InvokeVoidAsync("downloadFile", b64,
+            $"Inscripciones_{DateTime.Now:yyyyMMdd}.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+}

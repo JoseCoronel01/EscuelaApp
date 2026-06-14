@@ -1,0 +1,17 @@
+@using EscuelaApp.Components.Layout
+
+<Router AppAssembly="@typeof(App).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <PageTitle>Página no encontrada</PageTitle>
+        <LayoutView Layout="@typeof(MainLayout)">
+            <div class="not-found">
+                <h2>Página no encontrada</h2>
+                <p>Lo sentimos, la página que buscas no existe.</p>
+            </div>
+        </LayoutView>
+    </NotFound>
+</Router>

@@ -1,0 +1,161 @@
+@page "/catalogos/grupos"
+@inject GrupoService GrupoSvc
+@inject MaestroService MaestroSvc
+@inject IJSRuntime JS
+
+<PageTitle>Grupos — EduSys</PageTitle>
+
+<div class="page-container">
+    <div class="toolbar">
+        <div class="toolbar-left">
+            <input class="search-input" type="text" placeholder="Buscar grupo..."
+                   @bind="_busqueda" @oninput="CargarAsync" />
+        </div>
+        <div class="toolbar-right">
+            <button class="btn btn-excel" @onclick="ExportarAsync">📥 Exportar Excel</button>
+            <button class="btn btn-primary" @onclick="Nuevo">＋ Nuevo Grupo</button>
+        </div>
+    </div>
+
+    @if (_cargando) { <div class="loading-state"><div class="spinner"></div></div> }
+    else
+    {
+        <div class="table-card">
+            <table class="data-table">
+                <thead><tr>
+                    <th>Nombre</th><th>Grado</th><th>Turno</th><th class="text-center">Ciclo</th>
+                    <th>Maestro Titular</th><th class="text-center">Capacidad</th>
+                    <th>Estado</th><th>Acciones</th>
+                </tr></thead>
+                <tbody>
+                    @foreach (var g in _lista)
+                    {
+                        <tr>
+                            <td><strong>@g.Nombre</strong></td>
+                            <td>@g.Grado</td>
+                            <td>@g.Turno</td>
+                            <td class="text-center">@g.CicloEscolar</td>
+                            <td>@g.MaestroNombre</td>
+                            <td class="text-center">@g.CapacidadMaxima</td>
+                            <td><span class="badge @(g.Activo ? "badge-success" : "badge-secondary")">@(g.Activo?"Activo":"Inactivo")</span></td>
+                            <td class="actions">
+                                <button class="btn-icon" @onclick="() => Editar(g)">✏️</button>
+                                <button class="btn-icon danger" @onclick="() => ConfEliminar(g)">🗑️</button>
+                            </td>
+                        </tr>
+                    }
+                    @if (_lista.Count == 0) { <tr><td colspan="8" class="empty-row">Sin registros</td></tr> }
+                </tbody>
+            </table>
+        </div>
+        <div class="table-footer">Total: @_lista.Count</div>
+    }
+
+    @if (_modal)
+    {
+        <div class="modal-backdrop" @onclick="Cerrar">
+            <div class="modal" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <h2>@(_item.Id == 0 ? "Nuevo Grupo" : "Editar Grupo")</h2>
+                    <button class="modal-close" @onclick="Cerrar">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-grid">
+                        <div class="form-group"><label>Nombre *</label><input class="form-control" @bind="_item.Nombre" placeholder="Ej: 1-A" /></div>
+                        <div class="form-group"><label>Grado *</label><input class="form-control" @bind="_item.Grado" placeholder="Ej: Primero" /></div>
+                        <div class="form-group">
+                            <label>Turno *</label>
+                            <select class="form-control" @bind="_item.Turno">
+                                <option value="">Seleccionar...</option>
+                                <option>Matutino</option>
+                                <option>Vespertino</option>
+                                <option>Nocturno</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>Ciclo Escolar *</label><input class="form-control" type="number" @bind="_item.CicloEscolar" /></div>
+                        <div class="form-group">
+                            <label>Maestro Titular *</label>
+                            <select class="form-control" @bind="_item.MaestroId">
+                                <option value="0">Seleccionar...</option>
+                                @foreach (var m in _maestros)
+                                { <option value="@m.Id">@m.NombreCompleto</option> }
+                            </select>
+                        </div>
+                        <div class="form-group"><label>Capacidad Máxima</label><input class="form-control" type="number" min="1" @bind="_item.CapacidadMaxima" /></div>
+                        <div class="form-group"><label class="checkbox-label"><input type="checkbox" @bind="_item.Activo" /> Activo</label></div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_err)) { <div class="alert alert-danger">@_err</div> }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" @onclick="Cerrar">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="Guardar">Guardar</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_confirm)
+    {
+        <div class="modal-backdrop" @onclick="() => _confirm=false">
+            <div class="modal modal-sm" @onclick:stopPropagation="true">
+                <div class="modal-header danger"><h2>Confirmar</h2></div>
+                <div class="modal-body"><p>¿Eliminar el grupo <strong>@_item.Nombre</strong>?</p></div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" @onclick="() => _confirm=false">Cancelar</button>
+                    <button class="btn btn-danger" @onclick="Eliminar">Eliminar</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Grupo> _lista = new();
+    private List<Maestro> _maestros = new();
+    private Grupo _item = new();
+    private string _busqueda = "", _err = "";
+    private bool _cargando = true, _modal = false, _confirm = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _maestros = await MaestroSvc.ObtenerTodosAsync();
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        _lista = await GrupoSvc.ObtenerTodosAsync(_busqueda);
+        _cargando = false;
+    }
+
+    private void Nuevo() { _item = new Grupo { CicloEscolar = DateTime.Now.Year, CapacidadMaxima = 30 }; _err = ""; _modal = true; }
+    private void Editar(Grupo g) { _item = new Grupo { Id=g.Id, Nombre=g.Nombre, Grado=g.Grado, Turno=g.Turno, CicloEscolar=g.CicloEscolar, MaestroId=g.MaestroId, CapacidadMaxima=g.CapacidadMaxima, Activo=g.Activo }; _err=""; _modal=true; }
+    private void ConfEliminar(Grupo g) { _item = g; _confirm = true; }
+    private void Cerrar() { _modal = false; _err = ""; }
+
+    private async Task Guardar()
+    {
+        if (string.IsNullOrWhiteSpace(_item.Nombre) || string.IsNullOrWhiteSpace(_item.Grado) ||
+            string.IsNullOrWhiteSpace(_item.Turno) || _item.MaestroId == 0)
+        { _err = "Nombre, grado, turno y maestro titular son obligatorios."; return; }
+        await GrupoSvc.GuardarAsync(_item);
+        _modal = false;
+        await CargarAsync();
+    }
+
+    private async Task Eliminar()
+    {
+        await GrupoSvc.EliminarAsync(_item.Id);
+        _confirm = false;
+        await CargarAsync();
+    }
+
+    private async Task ExportarAsync()
+    {
+        var bytes = await GrupoSvc.ExportarExcelAsync(_busqueda);
+        await JS.InvokeVoidAsync("downloadFile", Convert.ToBase64String(bytes),
+            $"Grupos_{DateTime.Now:yyyyMMdd}.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+}

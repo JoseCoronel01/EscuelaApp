@@ -1,0 +1,151 @@
+@page "/"
+@inject ReporteService ReporteSvc
+@inject NavigationManager Nav
+
+<PageTitle>Dashboard — EduSys</PageTitle>
+
+<div class="dashboard">
+
+    @if (_cargando)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Cargando información...</p>
+        </div>
+    }
+    else if (_resumen is not null)
+    {
+        <!-- KPI Cards -->
+        <div class="kpi-grid">
+            <div class="kpi-card kpi-blue">
+                <div class="kpi-icon">👨‍🎓</div>
+                <div class="kpi-body">
+                    <span class="kpi-value">@_resumen.TotalAlumnos</span>
+                    <span class="kpi-label">Alumnos Activos</span>
+                </div>
+            </div>
+            <div class="kpi-card kpi-green">
+                <div class="kpi-icon">👩‍🏫</div>
+                <div class="kpi-body">
+                    <span class="kpi-value">@_resumen.TotalMaestros</span>
+                    <span class="kpi-label">Maestros</span>
+                </div>
+            </div>
+            <div class="kpi-card kpi-purple">
+                <div class="kpi-icon">📋</div>
+                <div class="kpi-body">
+                    <span class="kpi-value">@_resumen.TotalInscripciones</span>
+                    <span class="kpi-label">Inscripciones Activas</span>
+                </div>
+            </div>
+            <div class="kpi-card kpi-orange">
+                <div class="kpi-icon">📊</div>
+                <div class="kpi-body">
+                    <span class="kpi-value">@_resumen.PromedioGeneral</span>
+                    <span class="kpi-label">Promedio General</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats secundarios -->
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-header">
+                    <h3>Resultado Académico</h3>
+                </div>
+                <div class="stat-body">
+                    <div class="stat-item success">
+                        <span class="stat-dot"></span>
+                        <span class="stat-name">Aprobados</span>
+                        <span class="stat-val">@_resumen.Aprobados</span>
+                    </div>
+                    <div class="stat-item danger">
+                        <span class="stat-dot"></span>
+                        <span class="stat-name">Reprobados</span>
+                        <span class="stat-val">@_resumen.Reprobados</span>
+                    </div>
+                    @{
+                        var total = _resumen.Aprobados + _resumen.Reprobados;
+                        var pctAp = total > 0 ? (int)((_resumen.Aprobados / (double)total) * 100) : 0;
+                    }
+                    <div class="progress-bar-wrap">
+                        <div class="progress-bar" style="width: @pctAp%"></div>
+                    </div>
+                    <span class="progress-label">@pctAp% aprobación</span>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header">
+                    <h3>Accesos Rápidos</h3>
+                </div>
+                <div class="quick-actions">
+                    <button class="qa-btn" @onclick='() => Nav.NavigateTo("catalogos/alumnos")'>
+                        <span>👨‍🎓</span> Nuevo Alumno
+                    </button>
+                    <button class="qa-btn" @onclick='() => Nav.NavigateTo("movimientos/inscripciones")'>
+                        <span>📋</span> Nueva Inscripción
+                    </button>
+                    <button class="qa-btn" @onclick='() => Nav.NavigateTo("movimientos/calificaciones")'>
+                        <span>📊</span> Capturar Calificaciones
+                    </button>
+                    <button class="qa-btn" @onclick='() => Nav.NavigateTo("reportes/kardex")'>
+                        <span>📄</span> Ver Kárdex
+                    </button>
+                </div>
+            </div>
+
+            <!-- Promedios por grupo -->
+            @if (_promediosGrupo.Count > 0)
+            {
+                <div class="stat-card wide">
+                    <div class="stat-header">
+                        <h3>Rendimiento por Grupo</h3>
+                    </div>
+                    <table class="mini-table">
+                        <thead>
+                            <tr>
+                                <th>Grupo</th>
+                                <th>Grado</th>
+                                <th>Alumnos</th>
+                                <th>Promedio</th>
+                                <th>Aprobados</th>
+                                <th>Reprobados</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var g in _promediosGrupo)
+                            {
+                                <tr>
+                                    <td><strong>@g.Grupo</strong></td>
+                                    <td>@g.Grado</td>
+                                    <td>@g.TotalAlumnos</td>
+                                    <td>
+                                        <span class="badge @(g.Promedio >= 6 ? "badge-success" : "badge-danger")">
+                                            @g.Promedio
+                                        </span>
+                                    </td>
+                                    <td>@g.Aprobados</td>
+                                    <td>@g.Reprobados</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private ResumenDashboard? _resumen;
+    private List<PromedioGrupo> _promediosGrupo = new();
+    private bool _cargando = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _resumen = await ReporteSvc.ObtenerResumenAsync();
+        _promediosGrupo = await ReporteSvc.ObtenerPromediosPorGrupoAsync();
+        _cargando = false;
+    }
+}

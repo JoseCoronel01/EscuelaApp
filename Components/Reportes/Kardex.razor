@@ -1,0 +1,140 @@
+@page "/reportes/kardex"
+@inject CalificacionService CalSvc
+@inject AlumnoService AlumnoSvc
+@inject IJSRuntime JS
+
+<PageTitle>Kárdex — EduSys</PageTitle>
+
+<div class="page-container">
+    <div class="toolbar">
+        <div class="toolbar-left">
+            <select class="form-control select-sm" @bind="_alumnoId" @bind:after="OnAlumnoChanged">
+                <option value="0">— Todos los alumnos —</option>
+                @foreach (var a in _alumnos)
+                { <option value="@a.Id">@a.NombreCompleto (@a.Matricula)</option> }
+            </select>
+        </div>
+        <div class="toolbar-right">
+            @if (_alumnoId > 0)
+            {
+                <button class="btn btn-excel" @onclick="ExportarBoletaAsync">📥 Boleta Individual</button>
+            }
+            <button class="btn btn-primary btn-excel" @onclick="ExportarKardexAsync">📥 Kárdex Completo</button>
+        </div>
+    </div>
+
+    @if (_alumnoId > 0)
+    {
+        <div class="reporte-section">
+            <div class="reporte-header">
+                <h3>Boleta de Calificaciones</h3>
+                <p>@(_alumnos.FirstOrDefault(a => a.Id == _alumnoId)?.NombreCompleto)</p>
+            </div>
+
+            @if (_calificacionesAlumno.Count > 0)
+            {
+                <div class="table-card">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Materia</th>
+                                <th>Grupo</th>
+                                <th class="text-center">Parcial 1</th>
+                                <th class="text-center">Parcial 2</th>
+                                <th class="text-center">Parcial 3</th>
+                                <th class="text-center">Promedio</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var c in _calificacionesAlumno)
+                            {
+                                <tr>
+                                    <td><strong>@c.MateriaNombre</strong></td>
+                                    <td>@c.GrupoNombre</td>
+                                    <td class="text-center">@c.Parcial1</td>
+                                    <td class="text-center">@c.Parcial2</td>
+                                    <td class="text-center">@c.Parcial3</td>
+                                    <td class="text-center">
+                                        <span class="badge @(c.Promedio >= 6 ? "badge-success" : "badge-danger")">
+                                            @c.Promedio
+                                        </span>
+                                    </td>
+                                    <td>@c.Estado</td>
+                                </tr>
+                            }
+                            <tr class="summary-row">
+                                <td colspan="5"><strong>Promedio General</strong></td>
+                                <td class="text-center">
+                                    <strong class="@(_promedioAlumno >= 6 ? "text-success" : "text-danger")">
+                                        @_promedioAlumno.ToString("F2")
+                                    </strong>
+                                </td>
+                                <td></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="empty-state">No hay calificaciones registradas para este alumno.</div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="reporte-hint">
+            <span class="hint-icon">💡</span>
+            <p>Selecciona un alumno para ver su boleta individual, o exporta el kárdex completo con el botón de arriba.</p>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Alumno> _alumnos = new();
+    private List<Calificacion> _calificacionesAlumno = new();
+    private int _alumnoId = 0;
+    private decimal _promedioAlumno = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _alumnos = await AlumnoSvc.ObtenerTodosAsync();
+    }
+
+    private async Task OnAlumnoChanged()
+    {
+        if (_alumnoId > 0)
+            await CargarCalificacionesAlumnoAsync();
+        else
+        {
+            _calificacionesAlumno = new();
+            _promedioAlumno = 0;
+        }
+    }
+
+    private async Task CargarCalificacionesAlumnoAsync()
+    {
+        _calificacionesAlumno = await CalSvc.ObtenerTodosAsync(alumnoId: _alumnoId);
+        _promedioAlumno = _calificacionesAlumno.Count > 0
+            ? Math.Round(_calificacionesAlumno.Average(c => c.Promedio), 2) : 0;
+    }
+
+    private async Task ExportarBoletaAsync()
+    {
+        var bytes = await CalSvc.ExportarBoletaAsync(_alumnoId);
+        var b64 = Convert.ToBase64String(bytes);
+        await JS.InvokeVoidAsync("downloadFile", b64,
+            $"Boleta_{_alumnoId}_{DateTime.Now:yyyyMMdd}.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+
+    private async Task ExportarKardexAsync()
+    {
+        var bytes = await CalSvc.ExportarExcelAsync();
+        var b64 = Convert.ToBase64String(bytes);
+        await JS.InvokeVoidAsync("downloadFile", b64,
+            $"Kardex_{DateTime.Now:yyyyMMdd}.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+}

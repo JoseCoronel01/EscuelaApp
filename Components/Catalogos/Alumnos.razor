@@ -1,0 +1,257 @@
+@page "/catalogos/alumnos"
+@inject AlumnoService AlumnoSvc
+@inject IJSRuntime JS
+
+<PageTitle>Alumnos — EduSys</PageTitle>
+
+<div class="page-container">
+    <!-- Barra de herramientas -->
+    <div class="toolbar">
+        <div class="toolbar-left">
+            <input class="search-input" type="text" placeholder="Buscar por nombre, matrícula..."
+                   @bind="_busqueda" @oninput="BuscarAsync" />
+        </div>
+        <div class="toolbar-right">
+            <button class="btn btn-excel" @onclick="ExportarExcelAsync">
+                📥 Exportar Excel
+            </button>
+            <button class="btn btn-primary" @onclick="NuevoAlumno">
+                ＋ Nuevo Alumno
+            </button>
+        </div>
+    </div>
+
+    <!-- Tabla -->
+    @if (_cargando)
+    {
+        <div class="loading-state"><div class="spinner"></div></div>
+    }
+    else
+    {
+        <div class="table-card">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Matrícula</th>
+                        <th>Nombre Completo</th>
+                        <th>Género</th>
+                        <th>Email</th>
+                        <th>Teléfono</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in _alumnos)
+                    {
+                        <tr>
+                            <td><span class="code">@a.Matricula</span></td>
+                            <td><strong>@a.NombreCompleto</strong></td>
+                            <td>@(a.Genero == "M" ? "Masculino" : "Femenino")</td>
+                            <td>@a.Email</td>
+                            <td>@a.Telefono</td>
+                            <td>
+                                <span class="badge @(a.Activo ? "badge-success" : "badge-secondary")">
+                                    @(a.Activo ? "Activo" : "Inactivo")
+                                </span>
+                            </td>
+                            <td class="actions">
+                                <button class="btn-icon" title="Editar" @onclick="() => EditarAlumno(a)">✏️</button>
+                                <button class="btn-icon danger" title="Eliminar" @onclick="() => ConfirmarEliminar(a)">🗑️</button>
+                            </td>
+                        </tr>
+                    }
+                    @if (_alumnos.Count == 0)
+                    {
+                        <tr><td colspan="7" class="empty-row">No se encontraron alumnos</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="table-footer">Total: @_alumnos.Count registros</div>
+    }
+
+    <!-- Modal Formulario -->
+    @if (_mostrarModal)
+    {
+        <div class="modal-backdrop" @onclick="CerrarModal">
+            <div class="modal" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <h2>@(_alumnoEditar.Id == 0 ? "Nuevo Alumno" : "Editar Alumno")</h2>
+                    <button class="modal-close" @onclick="CerrarModal">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Matrícula *</label>
+                            <input class="form-control" @bind="_alumnoEditar.Matricula" placeholder="Ej: 2025001" />
+                        </div>
+                        <div class="form-group">
+                            <label>Nombre *</label>
+                            <input class="form-control" @bind="_alumnoEditar.Nombre" />
+                        </div>
+                        <div class="form-group">
+                            <label>Apellido Paterno *</label>
+                            <input class="form-control" @bind="_alumnoEditar.ApellidoPaterno" />
+                        </div>
+                        <div class="form-group">
+                            <label>Apellido Materno</label>
+                            <input class="form-control" @bind="_alumnoEditar.ApellidoMaterno" />
+                        </div>
+                        <div class="form-group">
+                            <label>Fecha de Nacimiento *</label>
+                            <input class="form-control" type="date" @bind="_alumnoEditar.FechaNacimiento" />
+                        </div>
+                        <div class="form-group">
+                            <label>Género *</label>
+                            <select class="form-control" @bind="_alumnoEditar.Genero">
+                                <option value="">Seleccionar...</option>
+                                <option value="M">Masculino</option>
+                                <option value="F">Femenino</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input class="form-control" type="email" @bind="_alumnoEditar.Email" />
+                        </div>
+                        <div class="form-group">
+                            <label>Teléfono</label>
+                            <input class="form-control" @bind="_alumnoEditar.Telefono" />
+                        </div>
+                        <div class="form-group full-width">
+                            <label>Dirección</label>
+                            <input class="form-control" @bind="_alumnoEditar.Direccion" />
+                        </div>
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" @bind="_alumnoEditar.Activo" />
+                                Activo
+                            </label>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_error))
+                    {
+                        <div class="alert alert-danger">@_error</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" @onclick="CerrarModal">Cancelar</button>
+                    <button class="btn btn-primary" @onclick="GuardarAsync" disabled="@_guardando">
+                        @(_guardando ? "Guardando..." : "Guardar")
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Confirm Eliminar -->
+    @if (_mostrarConfirm)
+    {
+        <div class="modal-backdrop" @onclick="() => _mostrarConfirm = false">
+            <div class="modal modal-sm" @onclick:stopPropagation="true">
+                <div class="modal-header danger">
+                    <h2>Confirmar eliminación</h2>
+                </div>
+                <div class="modal-body">
+                    <p>¿Eliminar a <strong>@_alumnoEditar.NombreCompleto</strong>?</p>
+                    <p class="text-muted">Esta acción no se puede deshacer.</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" @onclick="() => _mostrarConfirm = false">Cancelar</button>
+                    <button class="btn btn-danger" @onclick="EliminarAsync">Eliminar</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Alumno> _alumnos = new();
+    private Alumno _alumnoEditar = new();
+    private string _busqueda = "";
+    private bool _cargando = true;
+    private bool _mostrarModal = false;
+    private bool _mostrarConfirm = false;
+    private bool _guardando = false;
+    private string _error = "";
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        _cargando = true;
+        _alumnos = await AlumnoSvc.ObtenerTodosAsync(_busqueda);
+        _cargando = false;
+    }
+
+    private async Task BuscarAsync() => await CargarAsync();
+
+    private void NuevoAlumno()
+    {
+        _alumnoEditar = new Alumno { FechaNacimiento = DateTime.Today.AddYears(-14) };
+        _error = "";
+        _mostrarModal = true;
+    }
+
+    private void EditarAlumno(Alumno a)
+    {
+        _alumnoEditar = new Alumno {
+            Id = a.Id, Matricula = a.Matricula, Nombre = a.Nombre,
+            ApellidoPaterno = a.ApellidoPaterno, ApellidoMaterno = a.ApellidoMaterno,
+            FechaNacimiento = a.FechaNacimiento, Genero = a.Genero,
+            Email = a.Email, Telefono = a.Telefono,
+            Direccion = a.Direccion, Activo = a.Activo
+        };
+        _error = "";
+        _mostrarModal = true;
+    }
+
+    private void ConfirmarEliminar(Alumno a)
+    {
+        _alumnoEditar = a;
+        _mostrarConfirm = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_alumnoEditar.Matricula) ||
+            string.IsNullOrWhiteSpace(_alumnoEditar.Nombre) ||
+            string.IsNullOrWhiteSpace(_alumnoEditar.ApellidoPaterno))
+        {
+            _error = "Matrícula, Nombre y Apellido Paterno son obligatorios.";
+            return;
+        }
+
+        _guardando = true;
+        _error = "";
+        try
+        {
+            await AlumnoSvc.GuardarAsync(_alumnoEditar);
+            _mostrarModal = false;
+            await CargarAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error: {ex.Message}";
+        }
+        finally { _guardando = false; }
+    }
+
+    private async Task EliminarAsync()
+    {
+        await AlumnoSvc.EliminarAsync(_alumnoEditar.Id);
+        _mostrarConfirm = false;
+        await CargarAsync();
+    }
+
+    private void CerrarModal() { _mostrarModal = false; _error = ""; }
+
+    private async Task ExportarExcelAsync()
+    {
+        var bytes = await AlumnoSvc.ExportarExcelAsync(_busqueda);
+        var b64 = Convert.ToBase64String(bytes);
+        await JS.InvokeVoidAsync("downloadFile", b64,
+            $"Alumnos_{DateTime.Now:yyyyMMdd}.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+}
