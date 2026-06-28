@@ -3,14 +3,8 @@ using EscuelaApp.Models;
 
 namespace EscuelaApp.Services;
 
-// ══════════════════════════════════════════════════════════════════════════════
-//  EXCEL EXPORT SERVICE — Servicio único de exportación a .xlsx
-//  Consumible desde cualquier otro servicio via inyección de dependencias
-// ══════════════════════════════════════════════════════════════════════════════
-
 public class ExcelExportService
 {
-    // ─── Paleta institucional ─────────────────────────────────────────────────
     private static readonly XLColor ColorEncabezado   = XLColor.FromHtml("#1E3A5F");
     private static readonly XLColor ColorTextoClaro   = XLColor.White;
     private static readonly XLColor ColorFilaAlterna  = XLColor.FromHtml("#EBF2FF");
@@ -18,10 +12,6 @@ public class ExcelExportService
     private static readonly XLColor ColorAprobado     = XLColor.FromHtml("#D4EDDA");
     private static readonly XLColor ColorReprobado    = XLColor.FromHtml("#F8D7DA");
     private static readonly XLColor ColorEnCurso      = XLColor.FromHtml("#FFF3CD");
-
-    // ══════════════════════════════════════════════════════════════════════════
-    //  API PÚBLICA — Un método por entidad + método genérico
-    // ══════════════════════════════════════════════════════════════════════════
 
     public byte[] ExportarAlumnos(List<Alumno> alumnos)
     {
@@ -125,13 +115,11 @@ public class ExcelExportService
             promedioColumna: 6);
     }
 
-    // ── Reporte de boleta de calificaciones por alumno ───────────────────────
     public byte[] ExportarBoleta(string nombreAlumno, List<Calificacion> calificaciones)
     {
         using var wb = new XLWorkbook();
         var ws = wb.Worksheets.Add("Boleta");
 
-        // Cabecera del reporte
         EscribirTitulo(ws, "BOLETA DE CALIFICACIONES", 1, 10);
         ws.Cell(2, 1).Value = $"Alumno: {nombreAlumno}";
         ws.Cell(2, 1).Style.Font.Bold = true;
@@ -141,7 +129,6 @@ public class ExcelExportService
         ws.Cell(3, 1).Value = $"Generado: {DateTime.Now:dd/MM/yyyy HH:mm}";
         ws.Range(3, 1, 3, 10).Merge();
 
-        // Encabezados tabla
         string[] headers = { "Materia", "Grupo", "Parcial 1", "Parcial 2", "Parcial 3", "Promedio", "Estado" };
         for (int c = 0; c < headers.Length; c++)
         {
@@ -150,7 +137,6 @@ public class ExcelExportService
             EstiloEncabezado(cell);
         }
 
-        // Datos
         for (int r = 0; r < calificaciones.Count; r++)
         {
             var cal = calificaciones[r];
@@ -163,7 +149,6 @@ public class ExcelExportService
             ws.Cell(fila, 6).Value = cal.Promedio;
             ws.Cell(fila, 7).Value = cal.Estado;
 
-            // Color por estado
             var color = cal.Estado switch {
                 "Aprobado"  => ColorAprobado,
                 "Reprobado" => ColorReprobado,
@@ -171,7 +156,6 @@ public class ExcelExportService
             };
             ws.Range(fila, 1, fila, 7).Style.Fill.BackgroundColor = color;
 
-            // Color promedio
             if (cal.Promedio >= 6)
                 ws.Cell(fila, 6).Style.Font.FontColor = XLColor.DarkGreen;
             else
@@ -179,7 +163,6 @@ public class ExcelExportService
             ws.Cell(fila, 6).Style.Font.Bold = true;
         }
 
-        // Fila de promedios finales
         int ultimaFila = calificaciones.Count + 6;
         ws.Cell(ultimaFila, 1).Value = "PROMEDIO GENERAL";
         ws.Cell(ultimaFila, 1).Style.Font.Bold = true;
@@ -194,7 +177,6 @@ public class ExcelExportService
         return ToBytes(wb);
     }
 
-    // ── Reporte de kardex completo (multi-hoja) ──────────────────────────────
     public byte[] ExportarKardex(
         List<Alumno> alumnos,
         List<Calificacion> calificaciones,
@@ -202,7 +184,6 @@ public class ExcelExportService
     {
         using var wb = new XLWorkbook();
 
-        // Hoja resumen
         var wsResumen = wb.Worksheets.Add("Resumen");
         EscribirTitulo(wsResumen, "KARDEX ESCOLAR — RESUMEN", 1, 6);
         string[] hResumen = { "Alumno", "Matrícula", "Materias Inscritas", "Aprobadas", "Reprobadas", "Promedio Gral." };
@@ -234,7 +215,6 @@ public class ExcelExportService
         }
         AjustarColumnas(wsResumen);
 
-        // Hoja detalle calificaciones
         var wsDetalle = wb.Worksheets.Add("Calificaciones");
         EscribirTitulo(wsDetalle, "DETALLE DE CALIFICACIONES", 1, 9);
         string[] hDet = { "Alumno", "Matrícula", "Materia", "Grupo", "P1", "P2", "P3", "Promedio", "Estado" };
@@ -271,10 +251,6 @@ public class ExcelExportService
         return ToBytes(wb);
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  MOTOR GENÉRICO
-    // ══════════════════════════════════════════════════════════════════════════
-
     private byte[] Generar(
         string nombreHoja,
         string titulo,
@@ -287,7 +263,6 @@ public class ExcelExportService
         using var wb = new XLWorkbook();
         var ws = wb.Worksheets.Add(nombreHoja);
 
-        // Título
         EscribirTitulo(ws, titulo, 1, columnas.Length);
         ws.Cell(2, 1).Value = $"Exportado: {DateTime.Now:dd/MM/yyyy HH:mm} | Total: {filas.Count} registros";
         ws.Range(2, 1, 2, columnas.Length).Merge();
@@ -295,7 +270,6 @@ public class ExcelExportService
         ws.Cell(2, 1).Style.Font.FontSize = 10;
         ws.Cell(2, 1).Style.Font.FontColor = XLColor.Gray;
 
-        // Encabezados columnas
         for (int c = 0; c < columnas.Length; c++)
         {
             var cell = ws.Cell(4, c + 1);
@@ -303,7 +277,6 @@ public class ExcelExportService
             EstiloEncabezado(cell);
         }
 
-        // Datos
         for (int r = 0; r < filas.Count; r++)
         {
             var fila = filas[r];
@@ -313,7 +286,6 @@ public class ExcelExportService
                 var cell = ws.Cell(row, c + 1);
                 cell.Value = fila[c]?.ToString() ?? "";
 
-                // Color decimal para promedios
                 if (promedioColumna.HasValue && c == promedioColumna.Value - 1
                     && decimal.TryParse(fila[c]?.ToString(), out var prom))
                 {
@@ -322,7 +294,6 @@ public class ExcelExportService
                 }
             }
 
-            // Color fila por estado
             if (estadoColumna.HasValue && colorMap != null && fila.Length >= estadoColumna.Value)
             {
                 var estado = fila[estadoColumna.Value - 1]?.ToString() ?? "";
@@ -337,7 +308,6 @@ public class ExcelExportService
             }
         }
 
-        // Bordes y ajuste
         var rango = ws.Range(4, 1, filas.Count + 5, columnas.Length);
         rango.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
         rango.Style.Border.InsideBorder  = XLBorderStyleValues.Hair;
@@ -345,8 +315,6 @@ public class ExcelExportService
         AjustarColumnas(ws);
         return ToBytes(wb);
     }
-
-    // ── Helpers de estilo ────────────────────────────────────────────────────
 
     private static void EscribirTitulo(IXLWorksheet ws, string texto, int fila, int columnas)
     {
