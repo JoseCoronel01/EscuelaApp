@@ -1,48 +1,3 @@
-using Microsoft.Data.Sqlite;
-
-namespace EscuelaApp.Services;
-
-public class DatabaseService
-{
-    public readonly string ConnectionString;
-    public readonly ObjectPatternQuery Query;
-
-    public DatabaseService(IConfiguration config)
-    {
-        var dbPath = config["Database:Path"];
-
-        if (string.IsNullOrWhiteSpace(dbPath))
-        {
-            dbPath = Path.Combine("Data", "escuela.db");
-        }
-
-        if (!Path.IsPathRooted(dbPath))
-        {
-            dbPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), dbPath));
-        }
-
-        var directory = Path.GetDirectoryName(dbPath);
-        if (!string.IsNullOrWhiteSpace(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        ConnectionString = $"Data Source={dbPath}";
-        Query = new ObjectPatternQuery(ConnectionString);
-    }
-
-    public async Task InicializarAsync()
-    {
-        using var conn = new SqliteConnection(ConnectionString);
-        await conn.OpenAsync();
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = GetEsquema();
-        await cmd.ExecuteNonQueryAsync();
-    }
-
-    private static string GetEsquema() => @"
-        PRAGMA journal_mode=WAL;
-
         CREATE TABLE IF NOT EXISTS Alumnos (
             Id                INTEGER PRIMARY KEY AUTOINCREMENT,
             Matricula         TEXT NOT NULL UNIQUE,
@@ -125,5 +80,3 @@ public class DatabaseService
             FOREIGN KEY (MateriaId)     REFERENCES Materias(Id),
             FOREIGN KEY (GrupoId)       REFERENCES Grupos(Id)
         );
-    ";
-}
