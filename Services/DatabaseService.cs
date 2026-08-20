@@ -11,23 +11,8 @@ public class DatabaseService
     {
         var dbPath = config["Database:Path"];
 
-        if (string.IsNullOrWhiteSpace(dbPath))
-        {
-            dbPath = Path.Combine("Data", "escuela.db");
-        }
-
-        if (!Path.IsPathRooted(dbPath))
-        {
-            dbPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), dbPath));
-        }
-
-        var directory = Path.GetDirectoryName(dbPath);
-        if (!string.IsNullOrWhiteSpace(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
         ConnectionString = $"Data Source={dbPath}";
+
         Query = new ObjectPatternQuery(ConnectionString);
     }
 
